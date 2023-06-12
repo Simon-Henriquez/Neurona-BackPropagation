@@ -6,13 +6,12 @@ from queue import Queue
 
 class Neurona:
     """Simple Neurona"""
-    def __init__(self, nombre: str = "", rango_aleatorio: tuple[int] = (-1, 1), cantidad_entradas: int = 2,
-                 cte_aprendizaje: float = 1/10):
+    def __init__(self, nombre: str = "", rango_aleatorio: tuple[int] = (-1, 1), cte_aprendizaje: float = 1/10):
         self.nombre = nombre
-        self.cantidad_entradas = cantidad_entradas
+        self.cantidad_entradas = 2
         self.estado = "Aprendizaje no terminado"
         self.bias = round(uniform(rango_aleatorio[0], rango_aleatorio[1]), 3)
-        self.pesos = [round(uniform(rango_aleatorio[0], rango_aleatorio[1]), 3) for _ in range(cantidad_entradas)]
+        self.pesos = [round(uniform(rango_aleatorio[0], rango_aleatorio[1]), 3) for _ in range(self.cantidad_entradas)]
         self.cte_aprendizaje = cte_aprendizaje
 
     def suma_ponderada(self, *entradas: int) -> float:
@@ -30,18 +29,16 @@ class Neurona:
             return 1
         return 0
 
-    def calcular_error(self, valor_deseado: int, valor_obtenido: int) -> int:
-        """Resta entre el valor deseado con el valor obtenido."""
-        return valor_deseado - valor_obtenido
-
-    def actualizar_pesos(self, *entradas: int, error: float) -> None:
+    def actualizar_pesos(self, entradas: tuple[int]) -> None:
         """Actualiza los pesos y el bias cuando el error es distinto de cero."""
-        if error == 0:
-            return 0
-        for i, val in enumerate(entradas):
-            self.pesos[i] = round(self.pesos[i] + (self.cte_aprendizaje * error * val), 3)
-        self.bias = round(self.cte_aprendizaje * error, 3)
-        return 1
+        self.bias = round(entradas[0], 3)
+        self.pesos[0] = round(self.pesos[0] + entradas[1], 3)
+        self.pesos[1] = round(self.pesos[1] + entradas[2], 3)
+
+    def front_propagation(self, *entradas):
+        """Propagar los datos por la neurona obteniendo el valor de salida."""
+        z = self.suma_ponderada(*entradas)
+        return self.activacion(z)
 
     def resultado(self, entradas: List[int]) -> List[int]:
         """Retorna los resultados para cierta entrada de valores usando el bias y pesos actuales."""
@@ -49,37 +46,49 @@ class Neurona:
         for i in range(0, len(entradas), 2):
             x1 = entradas[i]
             x2 = entradas[i+1]
-            z = self.suma_ponderada(x1, x2)
-            a = self.activacion(z)
+            a = self.front_propagation(x1, x2)
             result.append(a)
             print(f"Resultado para [{x1}, {x2}]: {a}")
         return result
 
 class BackPropagation:
     """Encargado de generar epocas hasta optimizar los pesos."""
-    @staticmethod
-    def descenso_gradiente(neurona: Neurona, entradas: List[int]) -> int:
+    @classmethod
+    def descenso_gradiente(cls, neurona: Neurona, entradas: List[int]) -> int:
         """Itera sobre la lista de entradas con sus respectivos\n
         valores esperados, indefinidamente hasta optimizar pesos."""
         cont = 0
         for i in range(0, len(entradas), neurona.cantidad_entradas+1):
             x1 = entradas[i]
             x2 =  entradas[i+1]
-            z = neurona.suma_ponderada(x1, x2)
-            a = neurona.activacion(z)
+            a = neurona.front_propagation(x1, x2)
             y = entradas[i+2]
-            e = neurona.calcular_error(y, a)
-            if cont == 0:
-                cont = neurona.actualizar_pesos(x1, x2, error=e)
+            e = cls.calcular_error(y, a)
+            if e != 0:
+                pesos_nuevos = BackPropagation.nuevos_pesos(x1, x2, error=e, neurona=neurona)
+                neurona.actualizar_pesos(pesos_nuevos)
+                cont = 1
         return cont
 
     @staticmethod
-    def optimizar(neurona: Neurona, entradas: List[int], queue: Queue = False) -> None:
-        """Calcula nuevos pesos hasta obtener los optimos.\n
-        La queue es para fines visuales con la interfaz"""
+    def nuevos_pesos(*valores, error: float, neurona: Neurona) -> tuple[int]:
+        b_nuevo = 1 * neurona.cte_aprendizaje * error
+        w1_nuevo = valores[0] * neurona.cte_aprendizaje * error
+        w2_nuevo = valores[1] * neurona.cte_aprendizaje * error
+        return (b_nuevo, w1_nuevo, w2_nuevo)
+
+    @staticmethod
+    def calcular_error(valor_deseado: int, valor_obtenido: int) -> int:
+        """Resta entre el valor deseado con el valor obtenido."""
+        return valor_deseado - valor_obtenido
+
+    @classmethod
+    def epocar_hasta_optimizar(cls, neurona: Neurona, entradas: List[int], queue: Queue = False) -> None:
+        """Ciclo de generar epocas hasta encontrar los valores adecuados para los pesos.
+        La queue es para almacenar los pesos de cada epoca y poder mostrarlos en la interfaz."""
         exitoso = 1
         while exitoso != 0:
-            exitoso = BackPropagation.descenso_gradiente(neurona, entradas)
+            exitoso = cls.descenso_gradiente(neurona, entradas)
             sleep(0.2)
             if queue:
                 queue.put((neurona.pesos[0], neurona.pesos[1], neurona.bias))
@@ -147,7 +156,7 @@ class UpperMenu(ttk.Frame):
         self.btn_or.configure(state="disabled")
         self.left_menu.insert_to_table(entradas)
         q = Queue()
-        t1 = Thread(target=BackPropagation.optimizar, args=(self.neurona, entradas, q))
+        t1 = Thread(target=BackPropagation.epocar_hasta_optimizar, args=(self.neurona, entradas, q))
         t2 = Thread(target=self.actualizar, args=(q,))
         t1.start()
         t2.start()
@@ -217,25 +226,21 @@ class BotMenu(ttk.Frame):
             self.table.insert(parent="", index=i, values=(entradas[i], entradas[i+1], entradas[i+2]))
 
 def main():
-    # neurona_and = Neurona(cte_aprendizaje=1/10)
-    # datos_and = [0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1]
-    # print(neurona_and)
-    # BackPropagation.optimizar(neurona_and, datos_and)
-    # print(neurona_and)
-    # sleep(2)
-    # prueba_and = [0, 0, 0, 1, 1, 0, 1, 1]
-    # neurona_and.resultado(prueba_and)
-    # print("\n")
-    # neurona_or = Neurona(cte_aprendizaje=1/10)
-    # datos_or = [0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1]
-    # print(neurona_and)
-    # BackPropagation.optimizar(neurona_or, datos_or)
-    # print(neurona_or)
-    # sleep(4)
-    # prueba_or = [0, 0, 0, 1, 1, 0, 1, 1]
-    # neurona_or.resultado(prueba_or)
+    neurona_and = Neurona(rango_aleatorio=(-1, 1), cte_aprendizaje=1/10)
+    datos_and = [0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1]
+    print("Neurona AND")
+    BackPropagation.epocar_hasta_optimizar(neurona=neurona_and, entradas=datos_and)
+    prueba_and = [0, 0, 0, 1, 1, 0, 1, 1]
+    neurona_and.resultado(entradas=prueba_and)
+    print("\n")
+    neurona_or = Neurona(rango_aleatorio=(-1, 1), cte_aprendizaje=1/10)
+    datos_or = [0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1]
+    print("Neurona OR")
+    BackPropagation.epocar_hasta_optimizar(neurona=neurona_or, entradas=datos_or)
+    prueba_or = [0, 0, 0, 1, 1, 0, 1, 1]
+    neurona_or.resultado(entradas=prueba_or)
 
-
+    # Interfaz
     neurona = Neurona(rango_aleatorio=(-2, 2), cte_aprendizaje=1/100)
     App("Simple Neurona de Dos Entradas", (1080,720), neurona)
 
