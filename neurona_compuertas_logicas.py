@@ -35,7 +35,7 @@ class Neurona:
         self.pesos[0] = round(self.pesos[0] + entradas[1], 3)
         self.pesos[1] = round(self.pesos[1] + entradas[2], 3)
 
-    def front_propagation(self, *entradas):
+    def front_propagation(self, *entradas) -> int:
         """Propagar los datos por la neurona obteniendo el valor de salida."""
         z = self.suma_ponderada(*entradas)
         return self.activacion(z)
@@ -55,8 +55,8 @@ class BackPropagation:
     """Encargado de generar epocas hasta optimizar los pesos."""
     @classmethod
     def descenso_gradiente(cls, neurona: Neurona, entradas: List[int]) -> int:
-        """Itera sobre la lista de entradas con sus respectivos\n
-        valores esperados, indefinidamente hasta optimizar pesos."""
+        """Propaga los datos por la neurona, calcula el error, obtiene los pesos actualizadores y actualiza los pesos de la neurona.
+        De esta manera se actualizan los pesos en la dirección en que el error disminuya."""
         cont = 0
         for i in range(0, len(entradas), neurona.cantidad_entradas+1):
             x1 = entradas[i]
@@ -162,13 +162,17 @@ class UpperMenu(ttk.Frame):
         t2.start()
 
     def actualizar(self, q):
+        cont = 0
+        self.left_menu.epocas.configure(text=f"Epocas: {cont}")
         while True:
+            cont += 1
             datos = q.get()
             if datos == None:
                 break
             self.left_menu.b.configure(text=datos[2])
             self.left_menu.w_1.configure(text=datos[0])
             self.left_menu.w_2.configure(text=datos[1])
+            self.left_menu.epocas.configure(text=f"Epocas: {cont}")
         print("t2 finished")
         self.left_menu.imagen_title.configure(text=f"Neurona {self.neurona.nombre} Entrenada")
         self.btn_and.configure(state="normal")
@@ -202,6 +206,7 @@ class BotMenu(ttk.Frame):
         self.table.column("X1", anchor="center", width=130)
         self.table.column("X2", anchor="center", width=130)
         self.table.column("Salida", anchor="center", width=130)
+        self.epocas = ttk.Label(self.sub_menu_bot, font=self.my_font, text="Epocas: ")
         self.sub_menu_top.pack(pady=(20,60))
         self.sub_menu_mid.pack(pady=(0,40))
         self.sub_menu_bot.pack()
@@ -213,6 +218,7 @@ class BotMenu(ttk.Frame):
         self.w_1.grid(row=0, column=3, padx=(0,50), pady=10)
         self.w_2_label.grid(row=0, column=4, padx=(0,2), pady=10)
         self.w_2.grid(row=0, column=5, padx=(0,0), pady=10)
+        self.epocas.pack()
         self.table.pack()
         style = ttk.Style()
         style.configure("Treeview", font=("SimSun", 20), rowheight=40)
@@ -241,7 +247,7 @@ def main():
     neurona_or.resultado(entradas=prueba_or)
 
     # Interfaz
-    neurona = Neurona(rango_aleatorio=(-2, 2), cte_aprendizaje=1/100)
+    neurona = Neurona(rango_aleatorio=(-2, 2), cte_aprendizaje=1/10)
     App("Simple Neurona de Dos Entradas", (1080,720), neurona)
 
 if __name__ == "__main__":
